@@ -49,13 +49,10 @@ const {
 
 app.use(
   cors({
-   origin: [
-      "http://localhost:5173",
-      "https://estaura-83c26.web.app",
-    ],
+    origin: process.env.CLIENT_URL.split(','),
     credentials: true,
   })
-)
+);
 app.use(express.json())
 app.use(cookieParser())
 
