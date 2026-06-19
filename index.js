@@ -49,7 +49,10 @@ const {
 
 app.use(
   cors({
-    origin: ["http://localhost:5173"],
+   origin: [
+      "http://localhost:5173",
+      "https://estaura-83c26.web.app",
+    ],
     credentials: true,
   })
 )
