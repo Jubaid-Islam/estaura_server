@@ -1,0 +1,27 @@
+# server
+
+# environment
+.env
+.env.*
+
+serviceAccountKey.json
+
+# logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# dependencies
+node_modules
+dist
+coverage
+
+# editor
+.DS_Store
+.vscode/
+.idea/
+*.sw?
