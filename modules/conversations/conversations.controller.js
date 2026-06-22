@@ -1,11 +1,20 @@
 const { ObjectId } = require("mongodb");
-const { createNotification } = require("../notifications/notificationsHelper");
 
 let conversationCollection;
 let messageCollection;
 
 const setConversationCollection = (collection) => { conversationCollection = collection; };
 const setMessageCollection = (collection) => { messageCollection = collection; };
+
+const getUnreadCountField = (role) => (role === "agent" ? "agentUnreadCount" : "userUnreadCount");
+
+const withUnreadCount = (conversation, role) => {
+  const unreadCountField = getUnreadCountField(role);
+  return {
+    ...conversation,
+    unreadCount: conversation[unreadCountField] || conversation.unreadCount || 0,
+  };
+};
 
 // create / get existing conversation
 const createConversation = async (req, res) => {
@@ -31,36 +40,33 @@ const createConversation = async (req, res) => {
       });
       await conversationCollection.updateOne(
         { _id: existing._id },
-        { $set: { lastMessage: firstMessage, lastMessageAt: new Date() } }
+        {
+          $set: { lastMessage: firstMessage, lastMessageAt: new Date() },
+          $inc: { agentUnreadCount: 1 },
+        }
       );
-      await createNotification({
-        recipientId: agentId,
-        recipientRole: "agent",
-        type: "new_message",
-        message: `New message from ${clientName} about "${propertyTitle}"`,
-        propertyId,
-        propertyImage,
-      });
       return res.send({ success: true, conversationId: existing._id, isNew: false });
     }
 
     const conversation = {
       propertyId,
       propertyTitle,
-      propertyImage:  propertyImage  || "",
-      propertyCity:   propertyCity   || "",   
-      propertyType:   propertyType   || "",    
-      propertyPrice:  propertyPrice  || 0,    
-      listingType:    listingType    || "buy", 
+      propertyImage: propertyImage || "",
+      propertyCity: propertyCity || "",
+      propertyType: propertyType || "",
+      propertyPrice: propertyPrice || 0,
+      listingType: listingType || "buy",
       agentId,
-      agentName:      agentName      || "",  
+      agentName: agentName || "",
       clientId,
       clientEmail,
       clientName,
-      dealStatus:     null,
-      lastMessage:    firstMessage,
-      lastMessageAt:  new Date(),
-      createdAt:      new Date(),
+      userUnreadCount: 0,
+      agentUnreadCount: 1,
+      dealStatus: null,
+      lastMessage: firstMessage,
+      lastMessageAt: new Date(),
+      createdAt: new Date(),
     };
 
     const result = await conversationCollection.insertOne(conversation);
@@ -75,15 +81,6 @@ const createConversation = async (req, res) => {
       createdAt: new Date(),
     });
 
-    await createNotification({
-      recipientId: agentId,
-      recipientRole: "agent",
-      type: "new_message",
-      message: `New inquiry from ${clientName} about "${propertyTitle}"`,
-      propertyId,
-      propertyImage,
-    });
-
     res.send({ success: true, conversationId, isNew: true });
   } catch (error) {
     console.error("Create conversation error:", error);
@@ -95,11 +92,11 @@ const createConversation = async (req, res) => {
 const getAgentConversations = async (req, res) => {
   try {
     const { agentId } = req.params;
-      const conversations = await conversationCollection
+    const conversations = await conversationCollection
       .find({ agentId })
       .sort({ lastMessageAt: -1 })
       .toArray();
-    res.send({ success: true, data: conversations });
+    res.send({ success: true, data: conversations.map((conversation) => withUnreadCount(conversation, "agent")) });
   } catch (error) {
     res.status(500).send({ success: false, error: error.message });
   }
@@ -113,7 +110,7 @@ const getClientConversations = async (req, res) => {
       .find({ clientId })
       .sort({ lastMessageAt: -1 })
       .toArray();
-    res.send({ success: true, data: conversations });
+    res.send({ success: true, data: conversations.map((conversation) => withUnreadCount(conversation, "user")) });
   } catch (error) {
     res.status(500).send({ success: false, error: error.message });
   }
@@ -139,10 +136,10 @@ const deleteConversation = async (req, res) => {
     await conversationCollection.deleteOne({
       _id: ObjectId.createFromHexString(conversationId),
     });
- 
+
     // all messages delete
     await messageCollection.deleteMany({ conversationId });
- 
+
     res.send({ success: true });
   } catch (error) {
     console.error("Delete conversation error:", error);
@@ -150,7 +147,29 @@ const deleteConversation = async (req, res) => {
   }
 };
 
+const markAsRead = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const role = req.user?.role;
+    const unreadCountField = getUnreadCountField(role);
 
+    // unread count reset 
+    await conversationCollection.updateOne(
+      { _id: ObjectId.createFromHexString(conversationId) },
+      { $set: { [unreadCountField]: 0, unreadCount: 0 } }
+    );
+
+    //unread message read 
+    await messageCollection.updateMany(
+      { conversationId, isRead: false },
+      { $set: { isRead: true } }
+    );
+
+    res.send({ success: true });
+  } catch (error) {
+    res.status(500).send({ success: false, error: error.message });
+  }
+};
 
 
 module.exports = {
@@ -161,4 +180,5 @@ module.exports = {
   getClientConversations,
   getConversationByPropertyAndClient,
   deleteConversation,
+  markAsRead
 };

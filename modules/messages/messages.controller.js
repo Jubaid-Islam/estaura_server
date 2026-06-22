@@ -1,5 +1,3 @@
-const { createNotification } = require("../notifications/notificationsHelper");
-
 let messageCollection;
 let conversationCollection;
 let dealCollection;
@@ -7,6 +5,8 @@ let dealCollection;
 const setMessageCollection = (collection) => { messageCollection = collection; };
 const setConversationCollection = (collection) => { conversationCollection = collection; };
 const setDealCollection = (collection) => { dealCollection = collection; };
+
+const getUnreadCountField = (senderRole) => (senderRole === "agent" ? "userUnreadCount" : "agentUnreadCount");
 
 // get messages
 const getMessages = async (req, res) => {
@@ -49,17 +49,11 @@ const sendMessage = async (req, res) => {
 
     await conversationCollection.updateOne(
       { _id: require("mongodb").ObjectId.createFromHexString(conversationId) },
-      { $set: { lastMessage: text.trim(), lastMessageAt: new Date() } }
+      {
+        $set: { lastMessage: text.trim(), lastMessageAt: new Date() },
+        $inc: { [getUnreadCountField(senderRole)]: 1 }
+      }
     );
-
-    await createNotification({
-      recipientId,
-      recipientRole,
-      type: "new_message",
-      message: `New message from ${senderName} about "${propertyTitle}"`,
-      propertyId,
-      propertyImage,
-    });
 
     res.send({ success: true, data: { ...message, _id: result.insertedId } });
   } catch (error) {

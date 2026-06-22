@@ -3,6 +3,7 @@ const router = express.Router();
 const verifyJWT = require("../../middlewares/verifyJWT");
 const {
     createConversation, getAgentConversations, getClientConversations, getConversationByPropertyAndClient, deleteConversation,
+    markAsRead,
 } = require("./conversations.controller");
 
 
@@ -14,5 +15,6 @@ router.get("/check/:propertyId/:clientId", verifyJWT, getConversationByPropertyA
 
 
 router.delete("/:conversationId", verifyJWT, deleteConversation);
+router.patch("/mark-read/:conversationId", verifyJWT, markAsRead); 
 
 module.exports = router;
